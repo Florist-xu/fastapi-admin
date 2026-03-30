@@ -1,9 +1,20 @@
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
 from tortoise import fields
 
 from models.common import BaseModel
 
+if TYPE_CHECKING:
+    from models.department import SystemDepartment
+    from models.role import SystemRole
+    from tortoise.fields.relational import ForeignKeyNullableRelation
+
 
 class SystemUser(BaseModel):
+    department_id: str | None
+    department: ForeignKeyNullableRelation[SystemDepartment]
     username = fields.CharField(max_length=255, null=False, description="用户名")
     password = fields.CharField(max_length=255, null=False, description="密码")
     email = fields.CharField(max_length=255, null=True, description="邮箱")
@@ -17,6 +28,13 @@ class SystemUser(BaseModel):
         default=3,
         description="用户身份标识",
     )
+    department = fields.ForeignKeyField(
+        "system.SystemDepartment",
+        related_name="users",
+        null=True,
+        description="所属部门",
+        source_field="department_id"
+    )
 
     class Meta:
         table = "system_user"
@@ -25,13 +43,17 @@ class SystemUser(BaseModel):
 
 
 class SystemUserRole(BaseModel):
-    role_id = fields.ForeignKeyField(
+    role_id: str | None
+    user_id: str | None
+    role: ForeignKeyNullableRelation[SystemRole]
+    user: ForeignKeyNullableRelation[SystemUser]
+    role = fields.ForeignKeyField(
         "system.SystemRole",
         null=True,
         on_delete=fields.CASCADE,
         source_field="role_id",
     )
-    user_id = fields.ForeignKeyField(
+    user = fields.ForeignKeyField(
         "system.SystemUser",
         null=True,
         on_delete=fields.CASCADE,

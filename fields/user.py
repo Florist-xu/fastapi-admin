@@ -1,7 +1,7 @@
 from datetime import datetime
 from uuid import UUID
 from typing import Optional
-from pydantic import AliasChoices, BaseModel, Field
+from pydantic import AliasChoices, BaseModel, Field, field_validator
 
 
 class UserCreate(BaseModel):
@@ -35,7 +35,6 @@ class UserOut(BaseModel):
 
 # 编辑
 class UserUpdate(BaseModel):
-    id: UUID
     username: Optional[str] = None
     password: Optional[str] = None
     email: Optional[str] = None
@@ -56,3 +55,22 @@ class UserLogin(BaseModel):
 
 class RefreshTokenIn(BaseModel):
     refreshToken: str
+
+
+class UserRoleUpdate(BaseModel):
+    user_id: str = Field(validation_alias=AliasChoices("user_id", "userId"))
+    role_ids: list[str] = Field(
+        default_factory=list,
+        validation_alias=AliasChoices("role_ids", "roleIds"),
+    )
+
+    @field_validator("role_ids", mode="before")
+    @classmethod
+    def normalize_role_ids(cls, value):
+        if value is None:
+            return []
+        if isinstance(value, str):
+            return [item.strip() for item in value.split(",") if item.strip()]
+        return value
+    
+

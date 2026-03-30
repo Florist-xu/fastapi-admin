@@ -3,7 +3,7 @@ from tortoise.expressions import Q
 
 from fields.user import RefreshTokenIn, UserLogin
 from models.casbin_rule import CasbinRule
-from models.menus import System_permission
+from models.menus import SystemPermission
 from models.role import SystemRole
 from models.user import SystemUser, SystemUserRole
 from utils.response import ResponseUtil
@@ -25,9 +25,9 @@ async def create_user(request: Request):
         return ResponseUtil.unauthorized(msg="用户不存在或已禁用")
 
     role_ids = await SystemUserRole.filter(
-        user_id_id=user.id,
+        user_id=user.id,
         is_del=False,
-    ).values_list("role_id_id", flat=True)
+    ).values_list("role_id", flat=True)
     role_ids = [rid for rid in role_ids if rid]
 
     roles = []
@@ -36,8 +36,8 @@ async def create_user(request: Request):
         role_rows = await SystemRole.filter(
             id__in=role_ids,
             is_del=False,
-        ).values("role_code")
-        roles = [row["role_code"] for row in role_rows if row.get("role_code")]
+        ).values("code")
+        roles = [row["code"] for row in role_rows if row.get("code")]
 
         if roles:
             permission_refs = await CasbinRule.filter(
@@ -49,7 +49,7 @@ async def create_user(request: Request):
             permission_refs = list({ref for ref in permission_refs if ref})
 
             if permission_refs:
-                permission_rows = await System_permission.filter(
+                permission_rows = await SystemPermission.filter(
                     is_del=False
                 ).filter(
                     Q(id__in=permission_refs)
@@ -67,8 +67,9 @@ async def create_user(request: Request):
         "userId": str(user.id),
         "userName": user.username,
         "roles": list(dict.fromkeys(roles)),
-        "buttons": buttons,
+        "permission_marks": buttons,
         "email": user.email,
+        "user_type": user.user_type,
     }
     return ResponseUtil.success(data=info_data)
 

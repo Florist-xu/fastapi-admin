@@ -2,8 +2,7 @@ from models.common import BaseModel
 from tortoise import fields
 
 
-class System_permission(BaseModel):
-    id = fields.CharField(pk=True, max_length=255, null=False, description="主键")
+class SystemPermission(BaseModel):
     menu_type = fields.SmallIntField(null=False, default=0, description="权限类型(0菜单、1按钮、2接口)")
     parent_id = fields.CharField(max_length=255, null=True, description="父权限ID")
     name = fields.CharField(max_length=255, null=True, description="权限名称/路由名称")
@@ -30,3 +29,6 @@ class System_permission(BaseModel):
     authMark = fields.CharField(max_length=255, null=True, description="权限标识(如 user:btn:add)")
     min_user_type = fields.SmallIntField(null=False, default=3, description="最低用户身份要求(0超级管理员,1管理员,2部门管理员,3普通用户)")
     remark = fields.CharField(max_length=500, null=True, description="备注说明")
+    class Meta:
+        table = "system_permission"
+        table_description = "系统权限表"

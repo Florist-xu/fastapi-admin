@@ -3,8 +3,7 @@ from tortoise import fields
 
 from models.common import BaseModel
 
-class System_department(BaseModel):
-
+class SystemDepartment(BaseModel):
 
     name = fields.CharField(max_length=50, null=False, description="部门名称")
     parent_id = fields.CharField(max_length=50, null=True, description="上级部门ID")

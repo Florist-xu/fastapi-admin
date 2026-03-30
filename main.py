@@ -3,11 +3,9 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
 from tortoise.contrib.fastapi import register_tortoise
 
-from apis.auth import authAPI
-from apis.role import roleAPI
-from apis.sql import sqlAPI
-from apis.user import userAPI
-from apis.casbin import casbinAPI
+from apis import register_routers
+
+
 from config import TORTOISE_ORM
 from middlewares import setup_middlewares
 from utils.response import ResponseUtil, HttpStatusConstant
@@ -32,7 +30,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     for err in exc.errors():
         loc = ".".join(str(x) for x in err.get("loc", []))
         msg = err.get("msg", "Invalid value")
-        errors.append({"field": loc, "message": msg})
+        errors.append({"字段": loc, "message": msg})
 
     return ResponseUtil.failure(
         code=HttpStatusConstant.BAD_REQUEST,
@@ -41,8 +39,4 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     )
 
 
-app.include_router(router=userAPI)
-app.include_router(router=authAPI)
-app.include_router(router=sqlAPI)
-app.include_router(router=roleAPI)
-app.include_router(router=casbinAPI)
+register_routers(app)
