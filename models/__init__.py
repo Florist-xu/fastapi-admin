@@ -4,6 +4,7 @@ from models.user import SystemUser, SystemUserRole
 from models.department import SystemDepartment
 from models.casbin_rule import CasbinRule
 from models.menus import SystemPermission
+from models.operation_log import SystemOperationLog
 
 
 
@@ -13,4 +14,5 @@ __all__ = [
     'SystemDepartment',
     "SystemPermission",
     'CasbinRule',
-    'SystemUserRole']
+    'SystemUserRole',
+    'SystemOperationLog']

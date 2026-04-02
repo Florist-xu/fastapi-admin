@@ -43,6 +43,8 @@ class UserUpdate(BaseModel):
     avatar: Optional[str] = None
     gender: Optional[int] = None
     status: Optional[int] = None
+    user_type: Optional[int] = None
+    department_id: Optional[str] = None
 
 class deleteUser(BaseModel):
     id: UUID
@@ -73,4 +75,3 @@ class UserRoleUpdate(BaseModel):
             return [item.strip() for item in value.split(",") if item.strip()]
         return value
     
-

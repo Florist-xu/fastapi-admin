@@ -1,6 +1,7 @@
 from fastapi import APIRouter
 
 from models.department import SystemDepartment
+from models.user import SystemUser
 from fields.deparment import DepartmentBase
 from utils.response import ResponseUtil
 
@@ -41,6 +42,30 @@ async def edit(id: str, department: DepartmentBase):
 # 删除
 @departmentAPI.delete("/{id}")
 async def delete(id: str):
+    department = await SystemDepartment.filter(id=id, is_del=False).first()
+    if not department:
+        return ResponseUtil.failure(msg="部门不存在")
+
+    users = await SystemUser.filter(department_id=id, is_del=False).values("username", "nickname")
+    if users:
+        user_names = []
+        for user in users[:10]:
+            display_name = user.get("username") or user.get("nickname") or ""
+            if display_name:
+                user_names.append(display_name)
+
+        suffix = " 等" if len(users) > 10 else ""
+        return ResponseUtil.failure(
+            msg=f"该部门下仍绑定了 {len(users)} 个用户，无法删除",
+            data={
+                "department_id": id,
+                "department_name": department.name,
+                "bound_user_count": len(users),
+                "bound_users": user_names,
+                "detail": f"请先移除或调整这些用户的所属部门：{'、'.join(user_names)}{suffix}",
+            },
+        )
+
     await SystemDepartment.filter(id=id).update(is_del=True)
     return ResponseUtil.success()
 
