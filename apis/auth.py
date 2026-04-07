@@ -65,7 +65,7 @@ async def create_user(request: Request):
 
     info_data = {
         "userId": str(user.id),
-        "userName": user.username,
+        "username": user.username,
         "roles": list(dict.fromkeys(roles)),
         "permission_marks": buttons,
         "email": user.email,
