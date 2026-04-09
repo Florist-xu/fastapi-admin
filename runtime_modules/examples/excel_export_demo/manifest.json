@@ -1,0 +1,14 @@
+{
+  "code": "excel_export_demo",
+  "name": "Excel 导出示例模块",
+  "version": "1.0.0",
+  "description": "为后台表格提供可热插拔的 Excel 导出能力。安装并加载后，前端表格即可按需调用模块接口导出 xlsx 文件。",
+  "author": "system",
+  "entry_module": "module",
+  "class_name": "Module",
+  "config": {
+    "default_sheet_name": "Data",
+    "author": "Art Design Pro",
+    "auto_filter": true
+  }
+}

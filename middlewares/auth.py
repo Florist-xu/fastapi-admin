@@ -15,7 +15,11 @@ PUBLIC_PATHS = {
 
 
 async def auth_middleware(request: Request, call_next):
-    if request.method == "OPTIONS" or request.url.path in PUBLIC_PATHS:
+    if (
+        request.method == "OPTIONS"
+        or request.url.path in PUBLIC_PATHS
+        or request.url.path.startswith("/files/")
+    ):
         return await call_next(request)
 
     auth_header = request.headers.get("Authorization", "").strip()

@@ -10,6 +10,10 @@ from .role import roleAPI
 from .sql import sqlAPI
 from .user import userAPI
 from .permission import permissionAPI
+from .article import articleAPI
+from .article_meta import articleCategoryAPI, articleTagAPI
+from .common import commonAPI
+from .runtime_module import runtimeModuleAPI
 
 
 ROUTERS = (
@@ -22,7 +26,12 @@ ROUTERS = (
     casbinAPI,
     departmentAPI,
     menusAPI,
-    permissionAPI
+    permissionAPI,
+    articleAPI,
+    articleCategoryAPI,
+    articleTagAPI,
+    commonAPI,
+    runtimeModuleAPI,
 )
 
 
@@ -37,6 +46,11 @@ __all__ = [
     "casbinAPI",
     "departmentAPI",
     "menusAPI",
+    "articleAPI",
+    "articleCategoryAPI",
+    "articleTagAPI",
+    "commonAPI",
+    "runtimeModuleAPI",
     "operationLogAPI",
     "roleAPI",
     "sqlAPI",
