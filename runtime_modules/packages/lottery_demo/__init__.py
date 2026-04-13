@@ -1,1 +1,0 @@
-"""Lottery demo runtime module."""

@@ -9,5 +9,19 @@
   "config": {
     "default_winner_count": 1,
     "module_title": "抽奖活动"
+  },
+  "frontend": {
+    "routes": [
+      {
+        "path": "runtime-lottery",
+        "parent_path": "/system",
+        "name": "RuntimeLotteryDemo",
+        "title": "抽奖模块演示",
+        "icon": "ri:gift-line",
+        "entry": "web/lottery-page.js",
+        "order": 95,
+        "minUserType": 1
+      }
+    ]
   }
 }

@@ -1,13 +1,16 @@
 from __future__ import annotations
 
-from io import BytesIO
 import re
-from typing import Any
+from io import BytesIO
+from typing import Any, cast
 from urllib.parse import quote
 
 from fastapi.responses import StreamingResponse
 from openpyxl import Workbook
+from openpyxl.cell.cell import Cell
 from openpyxl.styles import Alignment, Font, PatternFill
+from openpyxl.utils import get_column_letter
+from openpyxl.worksheet.worksheet import Worksheet
 
 from runtime_modules.base import RuntimeModuleBase, RuntimeModuleRoute
 
@@ -19,8 +22,8 @@ INVALID_SHEET_RE = re.compile(r'[:\\/?*\[\]]+')
 class Module(RuntimeModuleBase):
     def get_routes(self) -> list[RuntimeModuleRoute]:
         return [
-            RuntimeModuleRoute(path="/meta", methods=["GET"], handler="meta", summary="模块说明"),
-            RuntimeModuleRoute(path="/export", methods=["POST"], handler="export_file", summary="导出 Excel"),
+            RuntimeModuleRoute(path="/meta", methods=["GET"], handler="meta", summary="Module meta"),
+            RuntimeModuleRoute(path="/export", methods=["POST"], handler="export_file", summary="Export xlsx"),
         ]
 
     async def meta(self, request) -> dict[str, Any]:
@@ -34,11 +37,11 @@ class Module(RuntimeModuleBase):
                     "filename": "articles",
                     "sheet_name": "Articles",
                     "columns": [
-                        {"key": "title", "title": "标题", "width": 28},
-                        {"key": "status", "title": "状态", "width": 14},
+                        {"key": "title", "title": "Title", "width": 28},
+                        {"key": "status", "title": "Status", "width": 14},
                     ],
                     "rows": [
-                        {"title": "AI 应用观察", "status": "已发布"},
+                        {"title": "AI overview", "status": "Published"},
                     ],
                 },
             },
@@ -60,7 +63,7 @@ class Module(RuntimeModuleBase):
         rows = payload.get("rows") or []
 
         if raw_columns:
-            columns = []
+            columns: list[dict[str, Any]] = []
             for item in raw_columns:
                 key = str(item.get("key") or "").strip()
                 title = str(item.get("title") or "").strip()
@@ -81,24 +84,31 @@ class Module(RuntimeModuleBase):
             first_row = rows[0] if isinstance(rows[0], dict) else {}
             return [{"key": key, "title": key, "width": None} for key in first_row.keys()]
 
-        raise ValueError("columns 不能为空")
+        raise ValueError("columns cannot be empty")
 
     def _normalize_rows(self, payload: dict[str, Any]) -> list[dict[str, Any]]:
         rows = payload.get("rows")
         if not isinstance(rows, list) or not rows:
-            raise ValueError("rows 不能为空")
+            raise ValueError("rows cannot be empty")
 
         normalized_rows: list[dict[str, Any]] = []
         for item in rows:
             if isinstance(item, dict):
                 normalized_rows.append(item)
+
         if not normalized_rows:
-            raise ValueError("rows 必须是对象数组")
+            raise ValueError("rows must be a list of objects")
         return normalized_rows
 
-    def _build_workbook(self, *, columns: list[dict[str, Any]], rows: list[dict[str, Any]], sheet_name: str) -> bytes:
+    def _build_workbook(
+        self,
+        *,
+        columns: list[dict[str, Any]],
+        rows: list[dict[str, Any]],
+        sheet_name: str,
+    ) -> bytes:
         workbook = Workbook()
-        sheet = workbook.active
+        sheet = cast(Worksheet, workbook.active)
         sheet.title = sheet_name
         sheet.freeze_panes = "A2"
 
@@ -107,29 +117,29 @@ class Module(RuntimeModuleBase):
         header_alignment = Alignment(vertical="center", horizontal="center")
         body_alignment = Alignment(vertical="top", horizontal="left", wrap_text=True)
 
-        headers = [item["title"] for item in columns]
+        headers = [str(item["title"]) for item in columns]
         sheet.append(headers)
 
         for col_index, header in enumerate(headers, start=1):
-            cell = sheet.cell(row=1, column=col_index, value=header)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.alignment = header_alignment
+            header_cell = cast(Cell, sheet.cell(row=1, column=col_index, value=header))
+            header_cell.font = header_font
+            header_cell.fill = header_fill
+            header_cell.alignment = header_alignment
 
         for row in rows:
-            values = []
+            values: list[Any] = []
             for item in columns:
                 value = row.get(item["key"])
                 if isinstance(value, list):
-                    value = "、".join(str(entry) for entry in value if entry is not None)
+                    value = ", ".join(str(entry) for entry in value if entry is not None)
                 elif value is None:
                     value = ""
                 values.append(value)
             sheet.append(values)
 
-        for row in sheet.iter_rows(min_row=2):
-            for cell in row:
-                cell.alignment = body_alignment
+        for row_cells in sheet.iter_rows(min_row=2):
+            for cell in row_cells:
+                cast(Cell, cell).alignment = body_alignment
 
         for index, item in enumerate(columns, start=1):
             width = item.get("width")
@@ -137,7 +147,7 @@ class Module(RuntimeModuleBase):
                 sample_lengths = [len(str(item["title"]))]
                 sample_lengths.extend(len(str(row.get(item["key"], ""))) for row in rows[:100])
                 width = min(max(max(sample_lengths, default=12) + 2, 12), 48)
-            sheet.column_dimensions[sheet.cell(row=1, column=index).column_letter].width = width
+            sheet.column_dimensions[get_column_letter(index)].width = float(width)
 
         if self.context.config.get("auto_filter", True):
             sheet.auto_filter.ref = sheet.dimensions

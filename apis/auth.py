@@ -6,6 +6,7 @@ from models.casbin_rule import CasbinRule
 from models.menus import SystemPermission
 from models.role import SystemRole
 from models.user import SystemUser, SystemUserRole
+from utils.notification_service import create_login_notification
 from utils.response import ResponseUtil
 from utils.security import hash_password, verify_password
 from utils.token import create_token_pair, verify_jwt
@@ -49,9 +50,7 @@ async def create_user(request: Request):
             permission_refs = list({ref for ref in permission_refs if ref})
 
             if permission_refs:
-                permission_rows = await SystemPermission.filter(
-                    is_del=False
-                ).filter(
+                permission_rows = await SystemPermission.filter(is_del=False).filter(
                     Q(id__in=permission_refs)
                     | Q(path__in=permission_refs)
                     | Q(api_path__in=permission_refs)
@@ -90,12 +89,12 @@ async def login(loginInfo: UserLogin):
     if verify_password(loginInfo.password, user.password):
         pass
     elif user.password == loginInfo.password:
-        # Backward compatibility: upgrade legacy plain-text password on first successful login.
         new_password = hash_password(loginInfo.password)
         await SystemUser.filter(id=user.id).update(password=new_password)
     else:
         return ResponseUtil.failure(msg="密码错误")
 
+    await create_login_notification(user)
     data = create_token_pair(user_id=str(user.id), username=user.username)
     return ResponseUtil.success(data=data)
 

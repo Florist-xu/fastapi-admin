@@ -12,9 +12,12 @@ from config import TORTOISE_ORM
 from middlewares import setup_middlewares
 from utils.article_bootstrap import ensure_article_permissions
 from utils.article_schema import ensure_article_taxonomy_schema
+from utils.form_designer_bootstrap import ensure_form_designer_permissions
 from utils.module_bootstrap import ensure_runtime_module_permissions
 from utils.module_manager import runtime_module_manager
 from utils.module_schema import ensure_runtime_module_schema
+from utils.notification_bootstrap import ensure_notification_permissions
+from utils.notification_schema import ensure_notification_schema
 from utils.response import HttpStatusConstant, ResponseUtil
 
 
@@ -65,6 +68,9 @@ async def startup_init_article_module():
         await Tortoise.generate_schemas(safe=True)
     await ensure_article_taxonomy_schema()
     await ensure_runtime_module_schema()
+    await ensure_notification_schema()
     await ensure_article_permissions()
+    await ensure_form_designer_permissions()
     await ensure_runtime_module_permissions()
+    await ensure_notification_permissions()
     await runtime_module_manager.initialize()

@@ -139,10 +139,47 @@ DEFAULT_ROLE_CODES = {
 }
 
 
+def merge_menu_payload(permission: SystemPermission, payload: dict[str, Any]) -> dict[str, Any]:
+    update_payload = dict(payload)
+    if permission.menu_type != 0:
+        return update_payload
+
+    # Keep manual menu configuration changes made in the admin UI. Bootstrap
+    # should ensure the record exists, but it should not overwrite user-tuned
+    # title/icon/path/component/order/parent settings on every restart.
+    preserve_fields = [
+        "parent_id",
+        "title",
+        "path",
+        "component",
+        "icon",
+        "keepAlive",
+        "order",
+        "remark",
+        "showBadge",
+        "showTextBadge",
+        "isHide",
+        "isHideTab",
+        "link",
+        "isIframe",
+        "isFirstLevel",
+        "fixedTab",
+        "activePath",
+        "isFullPage",
+    ]
+    for field in preserve_fields:
+        current_value = getattr(permission, field, None)
+        if current_value not in (None, ""):
+            update_payload[field] = current_value
+
+    return update_payload
+
+
 async def upsert_permission(identity_filters: dict[str, Any], payload: dict[str, Any]) -> SystemPermission:
     permission = await SystemPermission.filter(**identity_filters).order_by("created_at").first()
     if permission:
-        await SystemPermission.filter(id=permission.id).update(is_del=False, **payload)
+        update_payload = merge_menu_payload(permission, payload)
+        await SystemPermission.filter(id=permission.id).update(is_del=False, **update_payload)
         return await SystemPermission.get(id=permission.id)
 
     return await SystemPermission.create(**payload)
@@ -172,7 +209,7 @@ async def ensure_policy(role_code: str, v1: str, v2: str) -> None:
 
 async def ensure_module_permissions(config: dict[str, Any]) -> list[SystemPermission]:
     menu_payload = config["menu"]
-    menu = await upsert_permission({"path": menu_payload["path"], "menu_type": 0}, menu_payload)
+    menu = await upsert_permission({"name": menu_payload["name"], "menu_type": 0}, menu_payload)
 
     permissions = [menu]
 

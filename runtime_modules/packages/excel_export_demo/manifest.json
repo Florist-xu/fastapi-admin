@@ -10,5 +10,16 @@
     "default_sheet_name": "Data",
     "author": "Art Design Pro",
     "auto_filter": true
+  },
+  "frontend": {
+    "capabilities": [
+      {
+        "key": "excel.export",
+        "title": "Excel 导出",
+        "endpoint": "/export",
+        "order": 1,
+        "minUserType": 1
+      }
+    ]
   }
 }

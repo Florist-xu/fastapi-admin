@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, File, Query, Request, UploadFile
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, Response
 
 from fields.runtime_module import RuntimeModuleConfigUpdate
 from utils.module_manager import RuntimeModuleError, runtime_module_manager
@@ -51,6 +51,24 @@ async def list_runtime_module_examples():
     return ResponseUtil.success(data=runtime_module_manager.list_examples())
 
 
+@runtimeModuleAPI.get("/client/bootstrap", summary="Runtime module client bootstrap")
+async def runtime_module_client_bootstrap():
+    await ensure_runtime_manager()
+    return ResponseUtil.success(data=await runtime_module_manager.get_client_bootstrap())
+
+
+@runtimeModuleAPI.get("/client/asset/{module_code}", summary="Runtime module client asset")
+async def runtime_module_client_asset(module_code: str, entry: str = Query(...)):
+    await ensure_runtime_manager()
+    try:
+        asset_path = await runtime_module_manager.resolve_client_asset(module_code, entry)
+        return FileResponse(asset_path, media_type="text/javascript; charset=utf-8")
+    except RuntimeModuleError as exc:
+        return ResponseUtil.failure(msg=str(exc), code=HttpStatusConstant.NOT_FOUND)
+    except Exception as exc:  # noqa: BLE001
+        return ResponseUtil.error(msg=f"模块前端资源读取失败: {exc}")
+
+
 @runtimeModuleAPI.post("/install/upload", summary="Install module from zip")
 async def install_runtime_module_upload(request: Request, file: UploadFile = File(...)):
     await ensure_runtime_manager()
@@ -82,7 +100,7 @@ async def load_runtime_module(module_code: str):
     await ensure_runtime_manager()
     try:
         result = await runtime_module_manager.load_module(module_code)
-        return ResponseUtil.success(msg="模块已加载", data=result)
+        return ResponseUtil.success(msg="模块加载成功", data=result)
     except RuntimeModuleError as exc:
         return ResponseUtil.failure(msg=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -94,7 +112,7 @@ async def unload_runtime_module(module_code: str):
     await ensure_runtime_manager()
     try:
         result = await runtime_module_manager.unload_module(module_code)
-        return ResponseUtil.success(msg="模块已卸载", data=result)
+        return ResponseUtil.success(msg="模块卸载成功", data=result)
     except RuntimeModuleError as exc:
         return ResponseUtil.failure(msg=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -106,7 +124,7 @@ async def reload_runtime_module(module_code: str):
     await ensure_runtime_manager()
     try:
         result = await runtime_module_manager.reload_module(module_code)
-        return ResponseUtil.success(msg="模块已重新加载", data=result)
+        return ResponseUtil.success(msg="模块重载成功", data=result)
     except RuntimeModuleError as exc:
         return ResponseUtil.failure(msg=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -118,7 +136,7 @@ async def update_runtime_module_config(module_code: str, payload: RuntimeModuleC
     await ensure_runtime_manager()
     try:
         result = await runtime_module_manager.update_config(module_code, payload.config)
-        return ResponseUtil.success(msg="模块配置已更新", data=result)
+        return ResponseUtil.success(msg="模块配置更新成功", data=result)
     except RuntimeModuleError as exc:
         return ResponseUtil.failure(msg=str(exc))
     except Exception as exc:  # noqa: BLE001
@@ -130,7 +148,7 @@ async def uninstall_runtime_module(module_code: str):
     await ensure_runtime_manager()
     try:
         await runtime_module_manager.uninstall_module(module_code)
-        return ResponseUtil.success(msg="模块已卸载并删除")
+        return ResponseUtil.success(msg="模块卸载并删除成功")
     except RuntimeModuleError as exc:
         return ResponseUtil.failure(msg=str(exc))
     except Exception as exc:  # noqa: BLE001

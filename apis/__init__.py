@@ -1,19 +1,20 @@
 from fastapi import FastAPI
 
 from .ai import aiAPI
-from .auth import authAPI
-from .casbin import casbinAPI
-from .department import departmentAPI
-from .menus import menusAPI
-from .operation_log import operationLogAPI
-from .role import roleAPI
-from .sql import sqlAPI
-from .user import userAPI
-from .permission import permissionAPI
 from .article import articleAPI
 from .article_meta import articleCategoryAPI, articleTagAPI
+from .auth import authAPI
+from .casbin import casbinAPI
 from .common import commonAPI
+from .department import departmentAPI
+from .menus import menusAPI
+from .notification import notificationAPI
+from .operation_log import operationLogAPI
+from .permission import permissionAPI
+from .role import roleAPI
 from .runtime_module import runtimeModuleAPI
+from .sql import sqlAPI
+from .user import userAPI
 
 
 ROUTERS = (
@@ -27,6 +28,7 @@ ROUTERS = (
     departmentAPI,
     menusAPI,
     permissionAPI,
+    notificationAPI,
     articleAPI,
     articleCategoryAPI,
     articleTagAPI,
@@ -46,6 +48,7 @@ __all__ = [
     "casbinAPI",
     "departmentAPI",
     "menusAPI",
+    "notificationAPI",
     "articleAPI",
     "articleCategoryAPI",
     "articleTagAPI",
@@ -55,7 +58,7 @@ __all__ = [
     "roleAPI",
     "sqlAPI",
     "userAPI",
+    "permissionAPI",
     "ROUTERS",
-    'permissionAPI',
     "register_routers",
 ]

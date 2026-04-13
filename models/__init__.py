@@ -1,4 +1,3 @@
-
 from models.role import SystemRole
 from models.user import SystemUser, SystemUserRole
 from models.department import SystemDepartment
@@ -8,18 +7,21 @@ from models.operation_log import SystemOperationLog
 from models.article import SystemArticle
 from models.article_meta import SystemArticleCategory, SystemArticleTag
 from models.runtime_module import SystemRuntimeModule
-
+from models.notification import SystemNotification, SystemUserNotification
 
 
 __all__ = [
-    'SystemRole',
-    'SystemUser',
-    'SystemDepartment',
+    "SystemRole",
+    "SystemUser",
+    "SystemDepartment",
     "SystemPermission",
-    'CasbinRule',
-    'SystemUserRole',
-    'SystemOperationLog',
-    'SystemArticle',
-    'SystemArticleCategory',
-    'SystemArticleTag',
-    'SystemRuntimeModule']
+    "CasbinRule",
+    "SystemUserRole",
+    "SystemOperationLog",
+    "SystemArticle",
+    "SystemArticleCategory",
+    "SystemArticleTag",
+    "SystemRuntimeModule",
+    "SystemNotification",
+    "SystemUserNotification",
+]

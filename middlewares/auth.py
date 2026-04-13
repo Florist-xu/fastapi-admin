@@ -19,6 +19,7 @@ async def auth_middleware(request: Request, call_next):
         request.method == "OPTIONS"
         or request.url.path in PUBLIC_PATHS
         or request.url.path.startswith("/files/")
+        or request.url.path.startswith("/runtime-module/client/asset/")
     ):
         return await call_next(request)
 
