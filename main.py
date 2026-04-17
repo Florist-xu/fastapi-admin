@@ -12,12 +12,19 @@ from config import TORTOISE_ORM
 from middlewares import setup_middlewares
 from utils.article_bootstrap import ensure_article_permissions
 from utils.article_schema import ensure_article_taxonomy_schema
+from utils.dashboard_bootstrap import ensure_dashboard_permissions
+from utils.dashboard_schema import ensure_dashboard_schema
 from utils.form_designer_bootstrap import ensure_form_designer_permissions
+from utils.fishtank_schema import ensure_fishtank_schema
+from utils.fishtank_seed import ensure_fishtank_seed_data
+from utils.fishtank_bootstrap import ensure_fishtank_permissions
 from utils.module_bootstrap import ensure_runtime_module_permissions
 from utils.module_manager import runtime_module_manager
 from utils.module_schema import ensure_runtime_module_schema
 from utils.notification_bootstrap import ensure_notification_permissions
 from utils.notification_schema import ensure_notification_schema
+from utils.scheduled_action_runner import ensure_scheduled_action_runner, shutdown_scheduled_action_runner
+from utils.scheduled_action_schema import ensure_scheduled_action_schema
 from utils.response import HttpStatusConstant, ResponseUtil
 
 
@@ -69,8 +76,20 @@ async def startup_init_article_module():
     await ensure_article_taxonomy_schema()
     await ensure_runtime_module_schema()
     await ensure_notification_schema()
+    await ensure_scheduled_action_schema()
+    await ensure_dashboard_schema()
+    await ensure_fishtank_schema()
     await ensure_article_permissions()
+    await ensure_dashboard_permissions()
     await ensure_form_designer_permissions()
+    await ensure_fishtank_permissions()
     await ensure_runtime_module_permissions()
     await ensure_notification_permissions()
+    await ensure_fishtank_seed_data()
     await runtime_module_manager.initialize()
+    ensure_scheduled_action_runner()
+
+
+@app.on_event("shutdown")
+async def shutdown_runtime_services():
+    await shutdown_scheduled_action_runner()

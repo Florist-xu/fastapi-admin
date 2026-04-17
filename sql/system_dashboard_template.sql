@@ -1,0 +1,20 @@
+CREATE TABLE IF NOT EXISTS `system_dashboard_template` (
+  `id` CHAR(36) NOT NULL DEFAULT (UUID()) PRIMARY KEY COMMENT 'Primary key',
+  `is_del` TINYINT(1) NOT NULL DEFAULT 0 COMMENT 'Soft delete flag',
+  `created_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6) COMMENT 'Created time',
+  `updated_at` DATETIME(6) NULL DEFAULT CURRENT_TIMESTAMP(6) ON UPDATE CURRENT_TIMESTAMP(6) COMMENT 'Updated time',
+  `name` VARCHAR(120) NOT NULL COMMENT 'Template name',
+  `template_key` VARCHAR(120) NULL COMMENT 'Template key',
+  `description` VARCHAR(500) NULL COMMENT 'Template description',
+  `layout` JSON NOT NULL COMMENT 'Dashboard layout schema',
+  `theme_config` JSON NULL COMMENT 'Theme config',
+  `is_public` TINYINT(1) NOT NULL DEFAULT 1 COMMENT 'Whether template is public',
+  `status` SMALLINT NOT NULL DEFAULT 1 COMMENT 'Template status',
+  `created_by` CHAR(36) NULL COMMENT 'Creator user id',
+  `created_by_name` VARCHAR(255) NULL COMMENT 'Creator display name',
+  `updated_by` CHAR(36) NULL COMMENT 'Last updater user id',
+  `updated_by_name` VARCHAR(255) NULL COMMENT 'Last updater display name',
+  INDEX `idx_system_dashboard_template_status` (`status`),
+  INDEX `idx_system_dashboard_template_public` (`is_public`),
+  INDEX `idx_system_dashboard_template_key` (`template_key`)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='Dashboard template table';
