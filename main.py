@@ -1,4 +1,5 @@
 from pathlib import Path
+from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -28,49 +29,8 @@ from utils.scheduled_action_schema import ensure_scheduled_action_schema
 from utils.response import HttpStatusConstant, ResponseUtil
 
 
-app = FastAPI()
-upload_dir = Path(__file__).resolve().parent / "uplode"
-upload_dir.mkdir(parents=True, exist_ok=True)
-
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)
-setup_middlewares(app)
-app.mount("/files", StaticFiles(directory=str(upload_dir)), name="files")
-
-
-@app.exception_handler(RequestValidationError)
-async def validation_exception_handler(request: Request, exc: RequestValidationError):
-    errors = []
-    for err in exc.errors():
-        loc = ".".join(str(x) for x in err.get("loc", []))
-        msg = err.get("msg", "Invalid value")
-        errors.append({"字段": loc, "message": msg})
-
-    return ResponseUtil.failure(
-        code=HttpStatusConstant.BAD_REQUEST,
-        msg="参数校验失败",
-        data={"errors": errors},
-    )
-
-
-register_routers(app)
-
-
-async def should_bootstrap_orm_schema() -> bool:
-    connection = connections.get("default")
-    rows = await connection.execute_query_dict("SHOW TABLES LIKE 'system_user'")
-    return not rows
-
-
-@app.on_event("startup")
-async def startup_init_article_module():
+@asynccontextmanager
+async def lifespan(app: FastAPI):
     if await should_bootstrap_orm_schema():
         await Tortoise.generate_schemas(safe=True)
     await ensure_article_taxonomy_schema()
@@ -88,8 +48,51 @@ async def startup_init_article_module():
     await ensure_fishtank_seed_data()
     await runtime_module_manager.initialize()
     ensure_scheduled_action_runner()
+    try:
+        yield
+    finally:
+        await shutdown_scheduled_action_runner()
 
 
-@app.on_event("shutdown")
-async def shutdown_runtime_services():
-    await shutdown_scheduled_action_runner()
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    errors = []
+    for err in exc.errors():
+        loc = ".".join(str(x) for x in err.get("loc", []))
+        msg = err.get("msg", "Invalid value")
+        errors.append({"字段": loc, "message": msg})
+
+    return ResponseUtil.failure(
+        code=HttpStatusConstant.BAD_REQUEST,
+        msg="参数校验失败",
+        data={"errors": errors},
+    )
+
+
+def create_app() -> FastAPI:
+    app = FastAPI(lifespan=lifespan)
+    upload_dir = Path(__file__).resolve().parent / "uplode"
+    upload_dir.mkdir(parents=True, exist_ok=True)
+
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+
+    register_tortoise(app, config=TORTOISE_ORM, generate_schemas=False)
+    setup_middlewares(app)
+    app.mount("/files", StaticFiles(directory=str(upload_dir)), name="files")
+    app.add_exception_handler(RequestValidationError, validation_exception_handler)
+    register_routers(app)
+    return app
+
+
+app = create_app()
+
+
+async def should_bootstrap_orm_schema() -> bool:
+    connection = connections.get("default")
+    rows = await connection.execute_query_dict("SHOW TABLES LIKE 'system_user'")
+    return not rows
