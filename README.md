@@ -1,5 +1,9 @@
 # fastapi-admin
 
+## Docker 一键部署
+
+Docker 打包和一键部署说明见 [docker/README.md](docker/README.md)。
+
 一个基于 FastAPI + Tortoise ORM + MySQL 的后台服务示例，包含用户、角色、权限与登录鉴权能力。
 
 ## 环境要求

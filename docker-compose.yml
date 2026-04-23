@@ -1,0 +1,22 @@
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: fastapi-admin-app
+    restart: unless-stopped
+    env_file:
+      - ./docker/app.env
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    ports:
+      - "8000:8000"
+    volumes:
+      - upload_data:/app/uplode
+      - runtime_module_packages:/app/runtime_modules/packages
+      - runtime_module_uploads:/app/runtime_modules/_uploads
+
+volumes:
+  upload_data:
+  runtime_module_packages:
+  runtime_module_uploads:

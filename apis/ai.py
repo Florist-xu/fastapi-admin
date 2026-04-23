@@ -31,6 +31,8 @@ from utils.security import hash_password
 aiAPI = APIRouter(prefix="/ai", tags=["ai"])
 
 MessageRole = Literal["system", "user", "assistant"]
+AssistantScope = Literal["auto", "system", "general"]
+QueryScope = Literal["system", "general"]
 
 PROJECT_CONTEXT_FILE_LIMIT = 6000
 DEFAULT_TOOL_LOOP_LIMIT = 6
@@ -43,6 +45,49 @@ RESOURCE_LABELS = {
     "notification": "通知",
     "article": "文章",
 }
+
+SYSTEM_SCOPE_KEYWORDS = (
+    "fastapi",
+    "admin",
+    "backend",
+    "api",
+    "sql",
+    "mysql",
+    "tortoise",
+    "casbin",
+    "token",
+    "swagger",
+    "redoc",
+    "runtime module",
+    "dashboard",
+    "notification",
+    "article",
+    "permission",
+    "department",
+    "role",
+    "menu",
+    "user",
+    "登录",
+    "接口",
+    "路由",
+    "字段",
+    "菜单",
+    "权限",
+    "角色",
+    "用户",
+    "部门",
+    "通知",
+    "文章",
+    "数据库",
+    "表",
+    "发布",
+    "新增",
+    "修改",
+    "删除",
+    "查询",
+    "后台",
+    "系统",
+)
 
 
 class ChatMessage(BaseModel):
@@ -60,6 +105,7 @@ class StreamRequest(BaseModel):
     messages: list[ChatMessage] = Field(default_factory=list)
     conversation_summary: str | None = Field(default=None)
     enable_tools: bool = Field(default=True)
+    assistant_scope: AssistantScope = Field(default="auto")
 
 
 class IntentRequest(BaseModel):
@@ -225,6 +271,52 @@ def get_openai_config(model_override: str | None = None) -> tuple[str, str, str]
     return base_url, api_key, model
 
 
+def should_disable_thinking(model: str) -> bool:
+    normalized = (model or "").strip().lower()
+    return normalized.startswith("qwen3-") and "-thinking-" not in normalized
+
+
+def build_openai_request_body(
+    *,
+    model: str,
+    messages: list[dict[str, Any]],
+    temperature: float,
+    stream: bool,
+    tools: list[dict[str, Any]] | None = None,
+    response_format: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    request_body: dict[str, Any] = {
+        "model": model,
+        "messages": messages,
+        "temperature": temperature,
+        "stream": stream,
+    }
+
+    # DashScope requires Qwen3 open-source models to disable thinking mode
+    # when we use non-streaming planning calls, and using the same setting for
+    # streaming keeps chat output stable for this Copilot scene.
+    if should_disable_thinking(model):
+        request_body["enable_thinking"] = False
+
+    if tools:
+        request_body["tools"] = tools
+        request_body["tool_choice"] = "auto"
+    if response_format:
+        request_body["response_format"] = response_format
+    return request_body
+
+
+def build_openai_http_error(response: httpx.Response, *, streaming: bool = False) -> RuntimeError:
+    try:
+        payload = response.json()
+    except ValueError:
+        payload = response.text
+    request_type = "stream" if streaming else "request"
+    return RuntimeError(
+        f"OpenAI-compatible {request_type} failed: {response.status_code} {payload}"
+    )
+
+
 def simplify_model_schema(model_cls: type[BaseModel]) -> dict[str, Any]:
     schema = model_cls.model_json_schema()
     return {
@@ -357,6 +449,123 @@ def get_request_actor(request: Request) -> ToolContext:
     return ToolContext(actor_id=payload.get("sub"), actor_name=payload.get("username"))
 
 
+def detect_query_scope(prompt_text: str, payload: StreamRequest) -> QueryScope:
+    text_parts = [prompt_text.strip()]
+    text_parts.extend(message.content.strip() for message in payload.messages[-4:] if message.content.strip())
+    normalized = " ".join(text_parts).lower()
+    if not normalized:
+        return "system"
+
+    score = 0
+    for keyword in SYSTEM_SCOPE_KEYWORDS:
+        if keyword.lower() in normalized:
+            score += 1
+
+    local_system_terms = (
+        "\u540e\u53f0",
+        "\u7cfb\u7edf",
+        "\u7528\u6237",
+        "\u89d2\u8272",
+        "\u6743\u9650",
+        "\u83dc\u5355",
+        "\u90e8\u95e8",
+        "\u901a\u77e5",
+        "\u6587\u7ae0",
+        "\u63a5\u53e3",
+        "\u5b57\u6bb5",
+        "\u767b\u5f55",
+        "\u6570\u636e\u5e93",
+        "\u8def\u7531",
+        "\u53d1\u5e03",
+    )
+    if any(term in normalized for term in local_system_terms):
+        score += 2
+
+    action_terms = (
+        "\u65b0\u589e",
+        "\u4fee\u6539",
+        "\u5220\u9664",
+        "\u53d1\u5e03",
+        "\u5206\u914d",
+        "\u67e5\u8be2",
+        "\u67e5\u770b",
+        "\u91cd\u7f6e",
+    )
+    resource_terms = (
+        "\u7528\u6237",
+        "\u89d2\u8272",
+        "\u6743\u9650",
+        "\u83dc\u5355",
+        "\u90e8\u95e8",
+        "\u901a\u77e5",
+        "\u6587\u7ae0",
+    )
+    if any(action in normalized for action in action_terms) and any(
+        resource in normalized for resource in resource_terms
+    ):
+        score += 3
+    if re.search(r"(/auth|/user|/role|/permission|/menu|/department|/notification|/article|/runtime-module)", normalized):
+        score += 3
+    if re.search(r"(api|sql|mysql|token|casbin|swagger|fastapi)", normalized):
+        score += 2
+
+    return "system" if score > 0 else "general"
+
+
+def build_system_message_v2(payload: StreamRequest, prompt_text: str, query_scope: QueryScope) -> str:
+    if query_scope == "general":
+        system_parts = [
+            "你是一个自然、直接、可靠的中文助手。",
+            "如果用户的问题和当前后台系统无关，就按通用知识正常回答，不要强行往系统配置、接口、字段或后台操作上靠。",
+            "如果问题涉及当前系统、接口、数据库、角色权限、后台流程或需要执行系统操作，再切换到系统助手视角。",
+            "对于价格、产品型号、最新发布、时效性较强的信息，如果你无法确认最新事实，要明确说明可能存在变化，不要编造。",
+            "回答优先给结论，再补充必要说明，避免机械重复。",
+        ]
+    else:
+        system_parts = [
+            "你是当前 FastAPI Admin 项目的智能助手，需要优先依据项目现有代码、数据库模型和接口风格回答问题。",
+            "如果用户是在咨询实现方式、字段要求、流程说明、排查原因，请直接解释，不要执行写操作。",
+            "如果用户明确要求新增、修改、删除、发布、分配角色，并且信息充分，可以调用后端工具完成真实操作。",
+            "如果执行操作所需参数不足，先追问缺失字段，不要擅自猜测。",
+            "如果用户明确提出“创建10个测试用户”“批量造测试数据”这类批量需求，优先使用批量工具一次完成，不要反复循环调用单用户工具。",
+            "工具调用结束后，请用自然、灵活、像真实助手的语气总结结果，不要机械复述。",
+        ]
+
+    if payload.system_prompt:
+        system_parts.append(payload.system_prompt)
+    if payload.conversation_summary:
+        system_parts.append(f"以下是较早对话的压缩摘要，请把它视为真实上下文：\n{payload.conversation_summary}")
+    if query_scope == "system" and payload.use_project_context and prompt_text:
+        project_context = collect_project_context(prompt_text, payload.max_context_files)
+        if project_context:
+            system_parts.append(f"以下是当前项目的相关代码上下文：\n{project_context}")
+    return "\n\n".join(system_parts)
+
+
+def build_model_messages_v2(payload: StreamRequest) -> tuple[list[dict[str, Any]], str, QueryScope]:
+    cleaned_messages = [
+        {"role": message.role, "content": message.content.strip()}
+        for message in payload.messages
+        if message.content and message.content.strip()
+    ]
+
+    prompt_text = (payload.prompt or "").strip()
+    if not prompt_text:
+        user_messages = [message["content"] for message in cleaned_messages if message["role"] == "user"]
+        prompt_text = user_messages[-1] if user_messages else ""
+
+    if prompt_text and (
+        not cleaned_messages
+        or cleaned_messages[-1]["role"] != "user"
+        or cleaned_messages[-1]["content"] != prompt_text
+    ):
+        cleaned_messages.append({"role": "user", "content": prompt_text})
+
+    query_scope = payload.assistant_scope if payload.assistant_scope != "auto" else detect_query_scope(prompt_text, payload)
+    system_message = build_system_message_v2(payload, prompt_text or "项目问答", query_scope)
+    return [{"role": "system", "content": system_message}, *cleaned_messages], prompt_text, query_scope
+
+
 def chunk_text(content: str, chunk_size: int = 120) -> list[str]:
     if not content:
         return []
@@ -411,17 +620,14 @@ async def request_openai_chat_completion(
     if not base_url or not api_key or not model:
         raise RuntimeError("缺少 OPENAI_API_URL、OPENAI_API_KEY 或 OPENAI_MODEL 配置")
 
-    request_body: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "stream": False,
-    }
-    if tools:
-        request_body["tools"] = tools
-        request_body["tool_choice"] = "auto"
-    if response_format:
-        request_body["response_format"] = response_format
+    request_body = build_openai_request_body(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        stream=False,
+        tools=tools,
+        response_format=response_format,
+    )
 
     timeout = httpx.Timeout(90.0, connect=30.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -433,7 +639,8 @@ async def request_openai_chat_completion(
             },
             json=request_body,
         )
-        response.raise_for_status()
+        if response.is_error:
+            raise build_openai_http_error(response)
         return response.json(), model
 
 
@@ -447,12 +654,12 @@ async def iter_openai_content_chunks(
     if not base_url or not api_key or not model:
         raise RuntimeError("缺少 OPENAI_API_URL、OPENAI_API_KEY 或 OPENAI_MODEL 配置")
 
-    request_body: dict[str, Any] = {
-        "model": model,
-        "messages": messages,
-        "temperature": temperature,
-        "stream": True,
-    }
+    request_body = build_openai_request_body(
+        model=model,
+        messages=messages,
+        temperature=temperature,
+        stream=True,
+    )
 
     timeout = httpx.Timeout(connect=30.0, read=None, write=30.0, pool=30.0)
     async with httpx.AsyncClient(timeout=timeout) as client:
@@ -465,7 +672,15 @@ async def iter_openai_content_chunks(
             },
             json=request_body,
         ) as response:
-            response.raise_for_status()
+            if response.is_error:
+                error_text = await response.aread()
+                try:
+                    payload = json.loads(error_text.decode("utf-8", errors="ignore"))
+                except json.JSONDecodeError:
+                    payload = error_text.decode("utf-8", errors="ignore")
+                raise RuntimeError(
+                    f"OpenAI-compatible stream failed: {response.status_code} {payload}"
+                )
 
             async for line in response.aiter_lines():
                 if not line or not line.startswith("data:"):
@@ -1326,13 +1541,17 @@ async def run_tool_call_chain(
     payload: StreamRequest,
     request: Request,
 ) -> AsyncGenerator[str, None]:
-    messages, prompt_text = build_model_messages(payload)
+    messages, prompt_text, query_scope = build_model_messages_v2(payload)
+    effective_enable_tools = payload.enable_tools and query_scope == "system"
     _, _, model_name = get_openai_config(payload.model)
-    yield build_sse_event({"type": "start", "message": "stream started", "model": model_name}, event="start")
+    yield build_sse_event(
+        {"type": "start", "message": "stream started", "model": model_name, "resolved_scope": query_scope},
+        event="start",
+    )
 
     direct_batch_request = detect_batch_test_user_request(prompt_text)
     direct_batch_delete_request = detect_batch_delete_user_request(prompt_text)
-    if payload.enable_tools and direct_batch_request:
+    if effective_enable_tools and direct_batch_request:
         yield build_sse_event(
             {
                 "type": "tool",
@@ -1382,7 +1601,7 @@ async def run_tool_call_chain(
         yield build_sse_event({"type": "end", "done": True}, event="end")
         return
 
-    if payload.enable_tools and direct_batch_delete_request:
+    if effective_enable_tools and direct_batch_delete_request:
         yield build_sse_event(
             {
                 "type": "tool",
@@ -1427,8 +1646,9 @@ async def run_tool_call_chain(
         yield build_sse_event({"type": "end", "done": True}, event="end")
         return
 
-    if not payload.enable_tools:
+    if not effective_enable_tools:
         emitted = False
+        chunk_index = 0
         async for content in iter_openai_content_chunks(
             messages=messages,
             model_override=payload.model,
@@ -1436,9 +1656,10 @@ async def run_tool_call_chain(
         ):
             emitted = True
             yield build_sse_event(
-                {"type": "chunk", "index": 0, "content": content, "done": False},
+                {"type": "chunk", "index": chunk_index, "content": content, "done": False},
                 event="message",
             )
+            chunk_index += 1
 
         if not emitted:
             fallback_text = "当前没有可返回的内容。"
@@ -1468,7 +1689,7 @@ async def run_tool_call_chain(
         assistant_content = normalize_message_content(message.get("content"))
         tool_calls = message.get("tool_calls") or []
 
-        if tool_calls and payload.enable_tools:
+        if tool_calls and effective_enable_tools:
             messages.append(
                 {
                     "role": "assistant",

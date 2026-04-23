@@ -1,7 +1,7 @@
 import json
 import time
 from collections import OrderedDict
-from typing import Optional
+from typing import Literal, Optional
 
 from fastapi import APIRouter, Request
 from pydantic import BaseModel, Field
@@ -13,6 +13,7 @@ from utils.response import ResponseUtil
 operationLogAPI = APIRouter(prefix="/operation-log", tags=["operation-log"])
 
 CHAT_OPERATION_NAME = "chat_record"
+ChatAssistantScope = Literal["system", "general"]
 
 
 class ChatLogCreate(BaseModel):
@@ -21,6 +22,7 @@ class ChatLogCreate(BaseModel):
     session_id: str = Field(..., min_length=1, max_length=64)
     session_title: str = Field(..., min_length=1, max_length=255)
     command_type: str = Field(default="chat")
+    assistant_scope: ChatAssistantScope = Field(default="system")
     status: int = Field(default=1)
     cost_time: float = Field(default=0)
 
@@ -82,6 +84,7 @@ async def create_chat_log(payload: ChatLogCreate, request: Request):
                 "session_title": payload.session_title,
                 "user_message": payload.user_message,
                 "command_type": payload.command_type,
+                "assistant_scope": payload.assistant_scope,
             },
             ensure_ascii=False,
         ),
@@ -127,12 +130,14 @@ async def get_chat_sessions(request: Request, keyword: Optional[str] = None):
                 "created_at": item.created_at,
                 "updated_at": item.updated_at,
                 "latest_message": request_data.get("user_message") or "",
+                "latest_scope": request_data.get("assistant_scope") or "system",
                 "message_count": 1,
                 "cost_time": item.cost_time,
             }
             continue
 
         session["message_count"] += 1
+        session["latest_scope"] = request_data.get("assistant_scope") or session["latest_scope"]
 
     return ResponseUtil.success(data=list(sessions.values()))
 
@@ -165,6 +170,7 @@ async def get_chat_session_detail(session_id: str, request: Request):
                 "user_message": request_data.get("user_message", ""),
                 "assistant_message": response_data.get("assistant_message", ""),
                 "command_type": request_data.get("command_type", "chat"),
+                "assistant_scope": request_data.get("assistant_scope", "system"),
                 "status": item.status,
                 "cost_time": item.cost_time,
             }

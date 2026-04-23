@@ -1,6 +1,4 @@
-from typing import List
-
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends,Query
 from tortoise.expressions import Q
 
 from fields.role import Role, RoleBase, RolePermissionUpdate
@@ -48,8 +46,14 @@ def build_policy_payload(permission: dict) -> dict:
 
 
 @roleAPI.get("/list")
-async def get_all_role(page: PageParams = Depends(get_page_params)):
-    data = await paginate(SystemRole.all(), page.current, page.size)
+async def get_all_role(department_ids: str = Query(None),page: PageParams = Depends(get_page_params)):
+    query = SystemRole.filter(is_del=False)
+    if department_ids:
+        department_id_list = [item.strip() for item in department_ids.split(",") if item.strip()]
+        if department_id_list:
+            query = query.filter(department_id__in=department_id_list)
+
+    data = await paginate(query, page.current, page.size)
     for i in range(len(data["records"])):
         item = data["records"][i]
         dept = await SystemDepartment.filter(id=item.department_id).first()
